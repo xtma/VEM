@@ -4,9 +4,6 @@ import pickle as pkl
 import copy
 from segment_tree import SumSegmentTree, MinSegmentTree
 import random
-import matplotlib.pyplot as plt
-import math
-import time
 
 
 def array_min2d(x):
@@ -17,9 +14,20 @@ def array_min2d(x):
 
 
 class EpisodicMemory(object):
-    def __init__(self, buffer_size, state_dim, action_shape, obs_space,
-                 gamma=0.99, alpha=0.6, max_step=1000, policy=None, eta=None,
-                 policy_noise=None, noise_clip=None, max_action=None):
+
+    def __init__(self,
+                 buffer_size,
+                 state_dim,
+                 action_shape,
+                 obs_space,
+                 gamma=0.99,
+                 alpha=0.6,
+                 max_step=1000,
+                 policy=None,
+                 eta=None,
+                 policy_noise=None,
+                 noise_clip=None,
+                 max_action=None):
         buffer_size = int(buffer_size)
         self.state_dim = state_dim
         self.capacity = buffer_size
@@ -63,7 +71,8 @@ class EpisodicMemory(object):
         self._max_priority = 1.0
 
     def clean(self):
-        buffer_size, state_dim, obs_space, action_shape = self.capacity, self.state_dim, self.obs_space, self.action_shape
+        buffer_size, state_dim, obs_space, action_shape = \
+             self.capacity, self.state_dim, self.obs_space, self.action_shape
         self.curr_capacity = 0
         self.pointer = 0
 
@@ -103,11 +112,20 @@ class EpisodicMemory(object):
         return np.array([obs * (self.obs_space.high - self.obs_space.low) + self.obs_space.low for obs in obses])
 
     def save(self, filedir):
-        save_dict = {"query_buffer": self.query_buffer, "returns": self.returns,
-                     "replay_buffer": self.replay_buffer, "reward_buffer": self.reward_buffer,
-                     "truly_done_buffer": self.truly_done_buffer, "next_id": self.next_id, "prev_id": self.prev_id,
-                     "gamma": self.gamma, "_q_values": self._q_values, "done_buffer": self.done_buffer,
-                     "curr_capacity": self.curr_capacity, "capacity": self.capacity}
+        save_dict = {
+            "query_buffer": self.query_buffer,
+            "returns": self.returns,
+            "replay_buffer": self.replay_buffer,
+            "reward_buffer": self.reward_buffer,
+            "truly_done_buffer": self.truly_done_buffer,
+            "next_id": self.next_id,
+            "prev_id": self.prev_id,
+            "gamma": self.gamma,
+            "_q_values": self._q_values,
+            "done_buffer": self.done_buffer,
+            "curr_capacity": self.curr_capacity,
+            "capacity": self.capacity
+        }
         with open(os.path.join(filedir, "episodic_memory.pkl"), "wb") as memory_file:
             pkl.dump(save_dict, memory_file)
 
@@ -134,8 +152,8 @@ class EpisodicMemory(object):
         self.returns[index] = sampled_return
         self.lru[index] = self.time
 
-        self._it_sum[index] = self._max_priority ** self._alpha
-        self._it_min[index] = self._max_priority ** self._alpha
+        self._it_sum[index] = self._max_priority**self._alpha
+        self._it_min[index] = self._max_priority**self._alpha
         if next_id >= 0:
             self.next_id[index] = next_id
             if index not in self.prev_id[next_id]:
@@ -143,43 +161,6 @@ class EpisodicMemory(object):
         self.time += 0.01
 
         return index
-
-    def update_priority(self, idxes, priorities):
-        assert len(idxes) == len(priorities)
-        for idx, priority in zip(idxes, priorities):
-            priority = max(priority, 1e-6)
-            # assert priority > 0
-            assert 0 <= idx < self.capacity
-            self._it_sum[idx] = priority ** self._alpha
-            self._it_min[idx] = priority ** self._alpha
-
-            self._max_priority = max(self._max_priority, priority)
-
-    def sample_neg_keys(self, avoids, batch_size):
-        # sample negative keys
-        assert batch_size + len(
-            avoids) <= self.capacity, "can't sample that much neg samples from episodic memory!"
-        places = []
-        while len(places) < batch_size:
-            ind = np.random.randint(0, self.curr_capacity)
-            if ind not in places:
-                places.append(ind)
-        return places
-
-    def compute_approximate_return(self, obses, actions=None):
-        return np.min(np.array(self.sess.run(self.q_func, feed_dict={self.obs_ph: obses})), axis=0)
-
-    def compute_statistics(self, batch_size=1024):
-        estimated_qs = []
-        for i in range(math.ceil(self.curr_capacity / batch_size)):
-            start = i * batch_size
-            end = min((i + 1) * batch_size, self.curr_capacity)
-            obses = self.replay_buffer[start:end]
-            actions = None
-            estimated_qs.append(self.compute_approximate_return(obses, actions).reshape(-1))
-        estimated_qs = np.concatenate(estimated_qs)
-        diff = estimated_qs - self.q_values[:self.curr_capacity]
-        return np.min(diff), np.mean(diff), np.max(diff)
 
     def retrieve_trajectories(self):
         trajs = []
@@ -206,7 +187,7 @@ class EpisodicMemory(object):
             else:
                 Rtd = self.gamma * Rtd + r
             current_id = self.add(obs, a, z, Rtd, next_id)
-            
+
             if done:
                 self.end_points.append(current_id)
             self.replay_buffer[current_id] = obs
@@ -215,17 +196,6 @@ class EpisodicMemory(object):
             self.done_buffer[current_id] = done
             next_id = int(current_id)
         return
-
-    def sample_negative(self, batch_size, batch_idxs, batch_idxs_next, batch_idx_pre):
-        neg_batch_idxs = []
-        i = 0
-        while i < batch_size:
-            neg_idx = np.random.randint(0, self.curr_capacity - 2)
-            if neg_idx != batch_idxs[i] and neg_idx != batch_idxs_next[i] and neg_idx not in batch_idx_pre[i]:
-                neg_batch_idxs.append(neg_idx)
-                i += 1
-        neg_batch_idxs = np.array(neg_batch_idxs)
-        return neg_batch_idxs, self.replay_buffer[neg_batch_idxs]
 
     @staticmethod
     def switch_first_half(obs0, obs1, batch_size):
